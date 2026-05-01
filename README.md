@@ -2,6 +2,8 @@
 
 Family Pokémon TCG collection tracker. Static single-page app — no build step, no backend.
 
+**🔴 Live at [barrl-dev.github.io/barrl-pokedex](https://barrl-dev.github.io/barrl-pokedex/)**
+
 ![Per-kid collection view](docs/collection.png)
 
 Loads each kid's collection from `kids/<name>.json`, fetches sprites / types / evolution chains live from [PokéAPI](https://pokeapi.co/), and renders three views:
