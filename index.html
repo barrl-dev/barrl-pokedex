@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <title>Pokédex</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="apple-touch-icon" href="favicon.svg">
 <style>
   :root {
     --bg: #0f1226;
@@ -40,7 +42,7 @@
   header.h-harper { background: linear-gradient(135deg, var(--harper), #8a4f6b); }
   header.h-compare { background: linear-gradient(135deg, var(--jameson) 0%, var(--harper) 100%); }
   h1 { margin: 0; font-size: 28px; letter-spacing: 0.5px; }
-  h1 .pokeball { display: inline-block; transform: translateY(2px); margin-right: 8px; }
+  h1 .pokeball { display: inline-block; vertical-align: -4px; margin-right: 10px; width: 28px; height: 28px; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4)); }
   .sub { color: rgba(255,255,255,0.85); margin-top: 4px; font-size: 14px; }
 
   /* Kid picker */
@@ -526,7 +528,7 @@
 <body>
 
 <header id="header">
-  <h1><span class="pokeball">🔴</span> <span id="header-title">Family Pokédex</span></h1>
+  <h1><svg class="pokeball" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="46" fill="#fff" stroke="#1a1a1a" stroke-width="6"/><path d="M 4 50 A 46 46 0 0 1 96 50 Z" fill="#ee1515"/><line x1="4" y1="50" x2="96" y2="50" stroke="#1a1a1a" stroke-width="8"/><circle cx="50" cy="50" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="6"/><circle cx="50" cy="50" r="5" fill="#fff" stroke="#1a1a1a" stroke-width="3"/></svg><span id="header-title">Family Pokédex</span></h1>
   <div class="sub" id="subtitle">Loading…</div>
 </header>
 
