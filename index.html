@@ -1,0 +1,1358 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pokédex</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root {
+    --bg: #0f1226;
+    --panel: #181b34;
+    --panel-2: #21254a;
+    --text: #ecefff;
+    --muted: #9aa0c5;
+    --accent: #ffcb05;
+    --accent-2: #3d7dca;
+    --owned: #43d17e;
+    --missing: #4a4f7a;
+    --evolve: #ff6b9d;
+    --evolve-glow: rgba(255, 107, 157, 0.5);
+    --gold: #ffd166;
+    --jameson: #3d7dca;
+    --harper: #d685ad;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+    background: linear-gradient(135deg, #0f1226 0%, #1a1f4a 100%);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  header {
+    padding: 22px 32px 14px;
+    background: linear-gradient(135deg, var(--accent-2), #2a4d8c);
+    border-bottom: 4px solid var(--accent);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    transition: background 0.4s;
+  }
+  header.h-jameson { background: linear-gradient(135deg, var(--jameson), #1f4f80); }
+  header.h-harper { background: linear-gradient(135deg, var(--harper), #8a4f6b); }
+  header.h-compare { background: linear-gradient(135deg, var(--jameson) 0%, var(--harper) 100%); }
+  h1 { margin: 0; font-size: 28px; letter-spacing: 0.5px; }
+  h1 .pokeball { display: inline-block; transform: translateY(2px); margin-right: 8px; }
+  .sub { color: rgba(255,255,255,0.85); margin-top: 4px; font-size: 14px; }
+
+  /* Kid picker */
+  .kid-picker {
+    display: flex; gap: 6px; padding: 10px 32px 0;
+    background: var(--panel);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .kid-tab {
+    background: transparent; border: 0;
+    color: rgba(255,255,255,0.6);
+    padding: 12px 22px;
+    cursor: pointer;
+    font-size: 15px; font-weight: 700;
+    border-bottom: 3px solid transparent;
+    transition: all 0.15s;
+    position: relative;
+  }
+  .kid-tab:hover { color: var(--text); }
+  .kid-tab.active { color: var(--text); }
+  .kid-tab[data-kid="jameson"].active { border-bottom-color: var(--jameson); }
+  .kid-tab[data-kid="harper"].active { border-bottom-color: var(--harper); }
+  .kid-tab[data-kid="compare"].active { border-bottom-color: var(--accent); }
+  .kid-tab[data-kid="full"].active { border-bottom-color: white; }
+  .kid-tab .count {
+    font-size: 11px; opacity: 0.7; margin-left: 6px;
+    font-variant-numeric: tabular-nums; font-weight: 500;
+  }
+  .kid-tab.dot::before {
+    content: ""; display: inline-block;
+    width: 10px; height: 10px; border-radius: 50%;
+    margin-right: 8px; vertical-align: middle;
+  }
+  .kid-tab[data-kid="jameson"].dot::before { background: var(--jameson); }
+  .kid-tab[data-kid="harper"].dot::before { background: var(--harper); }
+
+  /* Sub view tabs (collection / full) */
+  .view-tabs {
+    display: flex; gap: 4px; padding: 0 32px;
+    background: var(--panel-2);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .tab {
+    background: transparent; border: 0; color: rgba(255,255,255,0.65);
+    padding: 10px 18px; cursor: pointer;
+    font-size: 13px; font-weight: 600;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+  }
+  .tab:hover { color: white; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab .count {
+    font-size: 11px; opacity: 0.7; margin-left: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .view { display: none; }
+  .view.active { display: block; }
+
+  .controls {
+    padding: 14px 32px;
+    background: var(--panel);
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+    position: sticky; top: 0; z-index: 10;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .controls input[type="search"] {
+    flex: 1 1 220px; min-width: 200px;
+    padding: 10px 14px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: var(--panel-2); color: var(--text); font-size: 14px;
+  }
+  .controls input[type="search"]::placeholder { color: var(--muted); }
+
+  .pill-group { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pill {
+    padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    text-transform: uppercase; cursor: pointer; user-select: none;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: var(--panel-2); color: var(--muted);
+    transition: all 0.15s;
+  }
+  .pill.active { background: var(--accent); color: #222; border-color: var(--accent); }
+  .pill:hover { color: var(--text); }
+  .pill.active:hover { color: #222; }
+
+  .type-pill {
+    padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 600;
+    text-transform: uppercase; cursor: pointer; user-select: none;
+    border: 1px solid rgba(255,255,255,0.15);
+    opacity: 0.5; transition: opacity 0.15s, transform 0.1s;
+    color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+  }
+  .type-pill.active { opacity: 1; transform: scale(1.05); }
+  .type-pill:hover { opacity: 0.85; }
+
+  .stats {
+    padding: 14px 32px;
+    background: var(--panel-2);
+    display: flex; flex-wrap: wrap; gap: 24px;
+    font-size: 13px; color: var(--muted);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    align-items: center;
+  }
+  .stats b { color: var(--text); font-size: 18px; margin-right: 4px; }
+  .evolve-banner {
+    background: linear-gradient(135deg, var(--owned), #2eb265);
+    color: white; padding: 10px 16px; border-radius: 10px;
+    font-size: 13px; font-weight: 600;
+    box-shadow: 0 0 24px rgba(67, 209, 126, 0.45);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .evolve-banner .num { font-size: 22px; font-weight: 800; }
+
+  main { padding: 24px 32px; }
+
+  /* Collection grid */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--panel);
+    border-radius: 14px;
+    padding: 12px 12px 14px;
+    text-align: center;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    border: 2px solid transparent;
+    position: relative;
+    min-height: 240px;
+  }
+  .card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.45); }
+
+  .card.playable {
+    border-color: var(--owned);
+    box-shadow: 0 0 0 1px var(--owned), 0 0 22px rgba(67, 209, 126, 0.55);
+    background: linear-gradient(180deg, rgba(67,209,126,0.12) 0%, var(--panel) 55%);
+  }
+  .card.to-find {
+    border-color: var(--evolve);
+    box-shadow: 0 0 0 1px var(--evolve), 0 0 14px var(--evolve-glow);
+    background: linear-gradient(180deg, rgba(255,107,157,0.08) 0%, var(--panel) 55%);
+  }
+  .card.final-form { border-color: rgba(255, 209, 102, 0.3); }
+  .card.loading { opacity: 0.5; }
+  .card.non-pokemon {
+    background: linear-gradient(180deg, rgba(255,203,5,0.08) 0%, var(--panel) 60%);
+  }
+
+  .card .sprite {
+    width: 130px; height: 130px;
+    image-rendering: -webkit-optimize-contrast;
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4));
+  }
+  .card .sprite-fallback {
+    width: 130px; height: 130px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 60px; opacity: 0.7;
+  }
+  .card .name { font-weight: 700; margin-top: 4px; font-size: 15px; }
+  .card .dex { color: var(--muted); font-size: 11px; }
+  .card .types { display: flex; gap: 4px; justify-content: center; margin-top: 6px; flex-wrap: wrap; }
+
+  .corner {
+    position: absolute; top: 6px;
+    font-size: 10px; font-weight: 700;
+    padding: 3px 7px; border-radius: 999px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .corner.dup { right: 6px; background: var(--accent); color: #222; }
+  .corner.rar { left: 6px; background: linear-gradient(135deg, #ff9f43, #ee5a24); color: white; }
+  .corner.unc { right: 6px; background: rgba(231,76,60,0.85); color: white; }
+  .corner.kind { left: 6px; background: var(--accent-2); color: white; }
+
+  .evo-tag {
+    margin-top: 8px;
+    background: linear-gradient(135deg, var(--evolve), #c44569);
+    color: white; border-radius: 8px; padding: 6px 8px;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .evo-tag .arrow { animation: pulse-arrow 1.5s ease-in-out infinite; }
+  @keyframes pulse-arrow { 0%,100% { transform: translateX(0); } 50% { transform: translateX(3px); } }
+  .evo-tag .next-sprites { display: flex; align-items: center; gap: 2px; }
+  .evo-tag .next-sprites img {
+    width: 28px; height: 28px;
+    background: rgba(255,255,255,0.18); border-radius: 50%; padding: 1px;
+  }
+  .evo-tag.playable { background: linear-gradient(135deg, var(--owned), #2eb265); }
+  .evo-tag.to-find { background: linear-gradient(135deg, var(--evolve), #c44569); }
+  .evo-tag.final { background: linear-gradient(135deg, var(--gold), #f08c00); color: #2c1810; }
+  .evo-tag.standalone { background: var(--panel-2); color: var(--muted); }
+  .evo-tag.non-pokemon { background: linear-gradient(135deg, var(--accent), #f08c00); color: #2c1810; }
+
+  /* Type colors */
+  .t-normal   { background: #A8A77A; }
+  .t-fire     { background: #EE8130; }
+  .t-water    { background: #6390F0; }
+  .t-electric { background: #F7D02C; color: #222 !important; text-shadow: none !important; }
+  .t-grass    { background: #7AC74C; }
+  .t-ice      { background: #96D9D6; color: #222 !important; text-shadow: none !important; }
+  .t-fighting { background: #C22E28; }
+  .t-poison   { background: #A33EA1; }
+  .t-ground   { background: #E2BF65; color: #222 !important; text-shadow: none !important; }
+  .t-flying   { background: #A98FF3; }
+  .t-psychic  { background: #F95587; }
+  .t-bug      { background: #A6B91A; }
+  .t-rock     { background: #B6A136; }
+  .t-ghost    { background: #735797; }
+  .t-dragon   { background: #6F35FC; }
+  .t-dark     { background: #705746; }
+  .t-steel    { background: #B7B7CE; color: #222 !important; text-shadow: none !important; }
+  .t-fairy    { background: #D685AD; }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+  }
+
+  /* Modal */
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+    padding: 20px; z-index: 100;
+  }
+  .overlay.show { display: flex; }
+  .modal {
+    background: var(--panel); border-radius: 16px;
+    max-width: 800px; width: 100%;
+    max-height: 90vh; overflow-y: auto;
+    padding: 28px;
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  }
+  .modal-head {
+    display: flex; align-items: center; gap: 24px; margin-bottom: 20px;
+    padding-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .modal-head img { width: 170px; height: 170px; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5)); }
+  .modal-head h2 { margin: 0; font-size: 30px; }
+  .modal-head .meta { color: var(--muted); margin-top: 4px; font-size: 14px; }
+  .modal section { margin-top: 22px; }
+  .modal h3 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--muted); margin: 0 0 12px;
+  }
+
+  .chain-tree { background: var(--panel-2); border-radius: 10px; padding: 16px; overflow-x: auto; }
+  .chain-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .chain-node {
+    padding: 8px 10px; border-radius: 10px; text-align: center;
+    border: 2px solid var(--missing); opacity: 0.55;
+    min-width: 88px; background: var(--panel); transition: all 0.15s;
+    position: relative;
+  }
+  .chain-node.owned-jameson {
+    border-color: var(--jameson); opacity: 1;
+    box-shadow: 0 0 0 3px rgba(61,125,202,0.18);
+  }
+  .chain-node.owned-harper {
+    border-color: var(--harper); opacity: 1;
+    box-shadow: 0 0 0 3px rgba(214,133,173,0.18);
+  }
+  .chain-node.owned-both {
+    border-image: linear-gradient(135deg, var(--jameson), var(--harper)) 1;
+    border-style: solid; opacity: 1;
+  }
+  .chain-node.owned {
+    border-color: var(--owned); opacity: 1;
+    box-shadow: 0 0 0 3px rgba(67, 209, 126, 0.18);
+  }
+  .chain-node.current {
+    border-color: var(--accent); opacity: 1;
+    transform: scale(1.05);
+    box-shadow: 0 0 0 3px rgba(255, 203, 5, 0.25);
+  }
+  .chain-node img { width: 64px; height: 64px; display: block; margin: 0 auto; }
+  .chain-node .lab { font-size: 12px; margin-top: 2px; text-transform: capitalize; }
+  .chain-node .own-pips {
+    position: absolute; top: -6px; right: -6px;
+    display: flex; gap: 2px;
+  }
+  .own-pip {
+    width: 16px; height: 16px; border-radius: 50%;
+    font-size: 9px; font-weight: 800; color: white;
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid var(--panel); box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  .own-pip.j { background: var(--jameson); }
+  .own-pip.h { background: var(--harper); }
+  .chain-arrow { color: var(--muted); font-size: 18px; align-self: center; }
+
+  .vitals { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+  .vital { background: var(--panel-2); padding: 10px 14px; border-radius: 8px; }
+  .vital .lbl { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .vital .val { font-size: 17px; font-weight: 600; margin-top: 2px; text-transform: capitalize; }
+
+  .stat-row {
+    display: grid; grid-template-columns: 100px 40px 1fr;
+    align-items: center; gap: 10px; padding: 4px 0; font-size: 13px;
+  }
+  .stat-row .stat-name { color: var(--muted); text-transform: capitalize; }
+  .stat-row .stat-val { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stat-bar { height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; }
+  .stat-bar-fill {
+    height: 100%; transition: width 0.4s ease;
+    background: linear-gradient(90deg, var(--accent-2), var(--accent));
+  }
+
+  .flavor { color: var(--muted); font-style: italic; line-height: 1.55; }
+  .src-link {
+    color: var(--muted); text-decoration: none;
+    border-bottom: 1px dashed rgba(154,160,197,0.4);
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .src-link:hover { color: var(--text); border-bottom-color: var(--text); }
+  .close-btn {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 28px; float: right; padding: 0; line-height: 1; margin-top: -8px;
+  }
+  .close-btn:hover { color: var(--text); }
+
+  .empty { grid-column: 1/-1; text-align: center; padding: 40px; color: var(--muted); }
+  .skeleton {
+    width: 130px; height: 130px;
+    background: linear-gradient(110deg, var(--panel-2) 30%, #2a2f5a 50%, var(--panel-2) 70%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+    border-radius: 50%; margin: 0 auto;
+  }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+  /* Full Pokédex tiles */
+  .dex-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 8px; padding: 0;
+  }
+  .tile {
+    background: var(--panel); border-radius: 10px;
+    padding: 8px 6px 10px; text-align: center;
+    cursor: pointer; border: 2px solid transparent;
+    position: relative; transition: transform 0.12s, box-shadow 0.12s;
+    opacity: 0.45; filter: grayscale(0.7);
+  }
+  .tile:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.3); }
+  .tile.owned-jameson {
+    opacity: 1; filter: none;
+    border-color: var(--jameson);
+    box-shadow: 0 0 0 1px var(--jameson), 0 0 10px rgba(61,125,202,0.35);
+  }
+  .tile.owned-harper {
+    opacity: 1; filter: none;
+    border-color: var(--harper);
+    box-shadow: 0 0 0 1px var(--harper), 0 0 10px rgba(214,133,173,0.35);
+  }
+  .tile.owned-both {
+    opacity: 1; filter: none;
+    border: 2px solid transparent;
+    background: linear-gradient(var(--panel), var(--panel)) padding-box,
+                linear-gradient(135deg, var(--jameson), var(--harper)) border-box;
+    box-shadow: 0 0 12px rgba(154, 130, 191, 0.5);
+  }
+  .tile img { width: 72px; height: 72px; display: block; margin: 0 auto; }
+  .tile .nm {
+    font-size: 11px; font-weight: 600; margin-top: 4px;
+    text-transform: capitalize; word-break: break-word; line-height: 1.2;
+  }
+  .tile .num {
+    font-size: 10px; color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .tile.owned-jameson .num,
+  .tile.owned-harper .num,
+  .tile.owned-both .num { color: var(--text); }
+  .tile .own-badges {
+    position: absolute; top: 4px; right: 4px;
+    display: flex; gap: 2px;
+  }
+  .own-badge {
+    width: 16px; height: 16px; border-radius: 50%;
+    font-size: 9px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    color: white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    border: 1.5px solid var(--panel);
+  }
+  .own-badge.j { background: var(--jameson); }
+  .own-badge.h { background: var(--harper); }
+
+  .gen-chip {
+    padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    background: var(--panel-2); color: var(--muted); cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.1); user-select: none;
+    transition: all 0.15s;
+  }
+  .gen-chip.active { background: var(--accent); color: #222; border-color: var(--accent); }
+  .gen-chip:hover { color: var(--text); }
+  .gen-chip.active:hover { color: #222; }
+
+  .loading-spinner { text-align: center; padding: 40px; color: var(--muted); }
+
+  /* Compare view */
+  .compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+  }
+  .compare-col {
+    background: var(--panel); border-radius: 12px; padding: 16px;
+    border-top: 4px solid;
+  }
+  .compare-col.both     { border-color: var(--accent); }
+  .compare-col.jameson  { border-color: var(--jameson); }
+  .compare-col.harper   { border-color: var(--harper); }
+  .compare-col h2 {
+    margin: 0 0 4px; font-size: 18px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .compare-col .col-sub { color: var(--muted); font-size: 12px; margin-bottom: 14px; }
+  .compare-col .col-count {
+    background: rgba(255,255,255,0.08); padding: 2px 10px; border-radius: 999px;
+    font-size: 12px; font-weight: 700; color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .compare-list { display: flex; flex-direction: column; gap: 6px; }
+  .compare-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 8px; border-radius: 8px;
+    background: var(--panel-2);
+    cursor: pointer;
+    transition: transform 0.1s, background 0.1s;
+  }
+  .compare-row:hover { background: #2a2f5a; transform: translateX(2px); }
+  .compare-row img { width: 40px; height: 40px; flex-shrink: 0; }
+  .compare-row .nm { font-size: 13px; font-weight: 600; text-transform: capitalize; }
+  .compare-row .meta { font-size: 11px; color: var(--muted); }
+
+  .trade-section {
+    margin-top: 24px;
+    background: var(--panel); border-radius: 12px; padding: 16px;
+    border-top: 4px solid var(--evolve);
+  }
+  .trade-section h2 { margin: 0 0 4px; font-size: 18px; }
+  .trade-section .col-sub { color: var(--muted); font-size: 12px; margin-bottom: 14px; }
+  .trade-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px; border-radius: 10px;
+    background: var(--panel-2); margin-bottom: 8px;
+    cursor: pointer; transition: background 0.1s;
+  }
+  .trade-row:hover { background: #2a2f5a; }
+  .trade-row .who {
+    font-size: 11px; font-weight: 800; padding: 2px 8px;
+    border-radius: 999px; color: white;
+  }
+  .trade-row .who.j { background: var(--jameson); }
+  .trade-row .who.h { background: var(--harper); }
+  .trade-row img { width: 48px; height: 48px; }
+  .trade-row .arrow { font-size: 18px; color: var(--evolve); }
+  .trade-row .nm { font-size: 14px; font-weight: 600; text-transform: capitalize; }
+
+  footer { text-align: center; padding: 24px; color: var(--muted); font-size: 12px; }
+  footer code { background: var(--panel-2); padding: 2px 6px; border-radius: 4px; }
+
+  @media (max-width: 760px) {
+    .compare-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 600px) {
+    header, .kid-picker, .view-tabs, .controls, .stats, main { padding-left: 16px; padding-right: 16px; }
+    .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    .card .sprite { width: 96px; height: 96px; }
+    .dex-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
+    .tile img { width: 56px; height: 56px; }
+    .modal-head { flex-direction: column; text-align: center; }
+  }
+</style>
+</head>
+<body>
+
+<header id="header">
+  <h1><span class="pokeball">🔴</span> <span id="header-title">Family Pokédex</span></h1>
+  <div class="sub" id="subtitle">Loading…</div>
+</header>
+
+<div class="kid-picker">
+  <button class="kid-tab dot active" data-kid="jameson">Jameson<span class="count" id="kt-jameson"></span></button>
+  <button class="kid-tab dot" data-kid="harper">Harper<span class="count" id="kt-harper"></span></button>
+  <button class="kid-tab" data-kid="compare">Compare</button>
+  <button class="kid-tab" data-kid="full">Full Pokédex</button>
+</div>
+
+<!-- Per-kid view (collection + full nested) -->
+<div id="kid-view" class="kid-section">
+  <div class="view-tabs" id="sub-tabs">
+    <button class="tab active" data-sub="collection">Collection<span class="count" id="tab-collection-count"></span></button>
+    <button class="tab" data-sub="full">All Pokémon<span class="count" id="tab-full-count"></span></button>
+  </div>
+
+  <!-- Collection view -->
+  <div class="view active" id="view-collection">
+    <div class="controls">
+      <input type="search" id="search" placeholder="Search by name or dex number…">
+      <div class="pill-group" id="evo-filters">
+        <span class="pill active" data-evo="all">All</span>
+        <span class="pill" data-evo="playable">✨ Playable evolution</span>
+        <span class="pill" data-evo="to-find">→ Evolution to find</span>
+        <span class="pill" data-evo="final">★ Final form</span>
+        <span class="pill" data-evo="standalone">Standalone</span>
+        <span class="pill" data-evo="non-pokemon">Trainers/Energy</span>
+      </div>
+      <div class="pill-group" id="type-filters"></div>
+    </div>
+    <div class="stats" id="stats"></div>
+    <main><div class="grid" id="grid"></div></main>
+  </div>
+
+  <!-- Per-kid full pokedex view -->
+  <div class="view" id="view-kid-full">
+    <div class="controls">
+      <input type="search" id="kid-full-search" placeholder="Search all Pokémon by name or #…">
+      <div class="pill-group" id="kid-own-filters">
+        <span class="pill active" data-own="all">All</span>
+        <span class="pill" data-own="owned">✓ Owned</span>
+        <span class="pill" data-own="missing">Not collected</span>
+      </div>
+      <div class="pill-group" id="kid-gen-filters"></div>
+    </div>
+    <div class="stats" id="kid-full-stats"></div>
+    <main><div class="dex-grid" id="kid-dex-grid"><div class="loading-spinner">Loading the National Pokédex…</div></div></main>
+  </div>
+</div>
+
+<!-- Compare view -->
+<div class="kid-section" id="compare-view" style="display:none">
+  <div class="stats" id="compare-stats"></div>
+  <main>
+    <div class="compare-grid">
+      <div class="compare-col both">
+        <h2>Both have <span class="col-count" id="cnt-both">0</span></h2>
+        <div class="col-sub">Trade duplicates or compare versions</div>
+        <div class="compare-list" id="list-both"></div>
+      </div>
+      <div class="compare-col jameson">
+        <h2>Only Jameson <span class="col-count" id="cnt-jameson">0</span></h2>
+        <div class="col-sub">Pokémon Harper doesn't have</div>
+        <div class="compare-list" id="list-jameson"></div>
+      </div>
+      <div class="compare-col harper">
+        <h2>Only Harper <span class="col-count" id="cnt-harper">0</span></h2>
+        <div class="col-sub">Pokémon Jameson doesn't have</div>
+        <div class="compare-list" id="list-harper"></div>
+      </div>
+    </div>
+    <div class="trade-section">
+      <h2>💡 Evolution trade ideas <span class="col-count" id="cnt-trade">0</span></h2>
+      <div class="col-sub">When one kid has a Pokémon that's the next-stage evolution of one the other has</div>
+      <div id="list-trade"></div>
+    </div>
+  </main>
+</div>
+
+<!-- Full Pokédex view (combined ownership) -->
+<div class="kid-section" id="full-view" style="display:none">
+  <div class="controls">
+    <input type="search" id="full-search" placeholder="Search all 1025 Pokémon…">
+    <div class="pill-group" id="full-own-filters">
+      <span class="pill active" data-own="all">All</span>
+      <span class="pill" data-own="any">✓ Owned by anyone</span>
+      <span class="pill" data-own="both">Both have</span>
+      <span class="pill" data-own="missing">Nobody has</span>
+    </div>
+    <div class="pill-group" id="full-gen-filters"></div>
+  </div>
+  <div class="stats" id="full-stats"></div>
+  <main><div class="dex-grid" id="dex-grid"><div class="loading-spinner">Loading the National Pokédex…</div></div></main>
+</div>
+
+<div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal"></div>
+</div>
+
+<footer>
+  Edit <code>kids/jameson.json</code> or <code>kids/harper.json</code> to fix or add cards. Sprite art © PokéAPI / The Pokémon Company.
+</footer>
+
+<script>
+const ALL_TYPES = ["normal","fire","water","electric","grass","ice","fighting","poison","ground","flying","psychic","bug","rock","ghost","dragon","dark","steel","fairy"];
+const API = "https://pokeapi.co/api/v2";
+const ART = id => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
+const CACHE_KEY = "pokedex-cache-v2";
+const SPECIES_KEY = "pokedex-species-v1";
+
+const KIDS = ["jameson", "harper"];
+const KID_LABEL = { jameson: "Jameson", harper: "Harper" };
+const KID_COLOR = { jameson: "var(--jameson)", harper: "var(--harper)" };
+
+// app state
+let kidData = {};                 // id → { owner, cards }
+let ownedByKid = {};              // id → Set(name) of owned pokemon (excludes non-pokemon)
+let pokeCache = {};
+let chainCache = {};
+let allSpecies = [];
+
+let currentKid = "jameson";
+let currentSubView = "collection";
+let topView = "kid";              // "kid" | "compare" | "full"
+
+let activeTypes = new Set();
+let evoFilter = "all";
+let searchTerm = "";
+
+let kidFullSearchTerm = "";
+let kidOwnFilter = "all";
+let kidActiveGens = new Set();
+
+let fullSearchTerm = "";
+let fullOwnFilter = "all";
+let fullActiveGens = new Set();
+
+const GENS = [
+  { id: 1, range: [1, 151],   label: "I" },
+  { id: 2, range: [152, 251], label: "II" },
+  { id: 3, range: [252, 386], label: "III" },
+  { id: 4, range: [387, 493], label: "IV" },
+  { id: 5, range: [494, 649], label: "V" },
+  { id: 6, range: [650, 721], label: "VI" },
+  { id: 7, range: [722, 809], label: "VII" },
+  { id: 8, range: [810, 905], label: "VIII" },
+  { id: 9, range: [906, 1025],label: "IX" }
+];
+function genFor(id) { return GENS.find(g => id >= g.range[0] && id <= g.range[1])?.id; }
+
+// ---------- caching ----------
+try {
+  const saved = JSON.parse(localStorage.getItem(CACHE_KEY) || "{}");
+  pokeCache = saved.poke || {};
+  chainCache = saved.chain || {};
+} catch {}
+function persistCache() {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ poke: pokeCache, chain: chainCache })); } catch {}
+}
+function loadSpeciesCache() {
+  try { return JSON.parse(localStorage.getItem(SPECIES_KEY) || "null"); } catch { return null; }
+}
+function saveSpeciesCache(list) {
+  try { localStorage.setItem(SPECIES_KEY, JSON.stringify(list)); } catch {}
+}
+
+// ---------- API ----------
+async function fetchJson(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`fetch ${url} failed: ${r.status}`);
+  return r.json();
+}
+async function loadPokemon(name) {
+  if (pokeCache[name]) return pokeCache[name];
+  try {
+    const [pkm, spc] = await Promise.all([
+      fetchJson(`${API}/pokemon/${name}`),
+      fetchJson(`${API}/pokemon-species/${name}`)
+    ]);
+    pokeCache[name] = {
+      id: pkm.id,
+      types: pkm.types.map(t => t.type.name),
+      sprite: ART(pkm.id),
+      height: pkm.height, weight: pkm.weight,
+      abilities: pkm.abilities.map(a => a.ability.name),
+      stats: pkm.stats.map(s => ({ name: s.stat.name, value: s.base_stat })),
+      genus: spc.genera?.find(g => g.language.name === 'en')?.genus,
+      flavor: spc.flavor_text_entries?.find(e => e.language.name === 'en')?.flavor_text?.replace(/\f|\n/g,' '),
+      generation: spc.generation?.name?.replace('generation-','').toUpperCase(),
+      habitat: spc.habitat?.name,
+      chainUrl: spc.evolution_chain?.url
+    };
+    return pokeCache[name];
+  } catch (e) {
+    console.warn("could not load", name, e);
+    return null;
+  }
+}
+async function loadChain(url) {
+  if (!url) return null;
+  if (chainCache[url]) return chainCache[url];
+  try {
+    const data = await fetchJson(url);
+    chainCache[url] = parseChain(data.chain);
+    return chainCache[url];
+  } catch { return null; }
+}
+function parseChain(node) {
+  return { name: node.species.name, evolves_to: (node.evolves_to || []).map(parseChain) };
+}
+function findInChain(node, name, path = []) {
+  if (node.name === name) return [...path, node];
+  for (const child of node.evolves_to) {
+    const found = findInChain(child, name, [...path, node]);
+    if (found) return found;
+  }
+  return null;
+}
+
+// ---------- evolution status (relative to a single kid) ----------
+function evoStatus(name, chain, owned) {
+  if (!chain) return { kind: "standalone", nextNames: [] };
+  const path = findInChain(chain, name);
+  if (!path) return { kind: "standalone", nextNames: [] };
+  const here = path[path.length - 1];
+  if (!here.evolves_to.length) {
+    const hasAny = chain.evolves_to.length > 0 || chain.name !== name;
+    return { kind: hasAny ? "final" : "standalone", nextNames: [] };
+  }
+  const nextNames = here.evolves_to.map(c => c.name);
+  const ownedNext = nextNames.filter(n => owned.has(n));
+  const missingNext = nextNames.filter(n => !owned.has(n));
+  if (ownedNext.length > 0) return { kind: "playable", nextNames, ownedNext, missingNext };
+  return { kind: "to-find", nextNames, ownedNext, missingNext };
+}
+
+// ---------- init ----------
+async function init() {
+  // load both kids in parallel
+  try {
+    const results = await Promise.all(KIDS.map(k => fetchJson(`kids/${k}.json`)));
+    KIDS.forEach((k, i) => {
+      kidData[k] = results[i];
+      ownedByKid[k] = new Set(results[i].cards.filter(c => !c.kind || c.kind === 'pokemon').map(c => c.name));
+    });
+  } catch (e) {
+    document.getElementById('grid').innerHTML = `<div class="empty">Could not load kids data: ${e.message}<br>Make sure you're serving the page (e.g. <code>python -m http.server 8000</code>) instead of opening as a file.</div>`;
+    return;
+  }
+
+  document.getElementById('kt-jameson').textContent = ` (${kidData.jameson.cards.length})`;
+  document.getElementById('kt-harper').textContent = ` (${kidData.harper.cards.length})`;
+
+  buildKidPicker();
+  buildSubTabs();
+  buildTypeFilters();
+  buildEvoFilters();
+  buildOwnFilters("kid-own-filters", v => { kidOwnFilter = v; renderKidFullDex(); });
+  buildOwnFilters("full-own-filters", v => { fullOwnFilter = v; renderFullDex(); });
+  buildGenFilters("kid-gen-filters", kidActiveGens, renderKidFullDex);
+  buildGenFilters("full-gen-filters", fullActiveGens, renderFullDex);
+
+  document.getElementById('search').addEventListener('input', e => { searchTerm = e.target.value.toLowerCase(); renderCollection(); });
+  document.getElementById('kid-full-search').addEventListener('input', e => { kidFullSearchTerm = e.target.value.toLowerCase(); renderKidFullDex(); });
+  document.getElementById('full-search').addEventListener('input', e => { fullSearchTerm = e.target.value.toLowerCase(); renderFullDex(); });
+
+  switchKid(currentKid);
+  loadAllPokemon();
+}
+
+function buildKidPicker() {
+  document.querySelectorAll('.kid-tab').forEach(t => {
+    t.onclick = () => {
+      const k = t.dataset.kid;
+      document.querySelectorAll('.kid-tab').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      if (k === 'compare') showCompare();
+      else if (k === 'full') showFull();
+      else switchKid(k);
+    };
+  });
+}
+
+function buildSubTabs() {
+  document.querySelectorAll('#sub-tabs .tab').forEach(t => {
+    t.onclick = () => {
+      document.querySelectorAll('#sub-tabs .tab').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      currentSubView = t.dataset.sub;
+      document.getElementById('view-collection').classList.toggle('active', currentSubView === 'collection');
+      document.getElementById('view-kid-full').classList.toggle('active', currentSubView === 'full');
+      if (currentSubView === 'full') openKidFullDex();
+    };
+  });
+}
+
+function buildTypeFilters() {
+  const wrap = document.getElementById('type-filters');
+  for (const t of ALL_TYPES) {
+    const el = document.createElement('span');
+    el.className = `type-pill t-${t}`;
+    el.textContent = t;
+    el.onclick = () => {
+      if (activeTypes.has(t)) { activeTypes.delete(t); el.classList.remove('active'); }
+      else { activeTypes.add(t); el.classList.add('active'); }
+      renderCollection();
+    };
+    wrap.appendChild(el);
+  }
+}
+function buildEvoFilters() {
+  document.querySelectorAll('#evo-filters .pill').forEach(p => {
+    p.onclick = () => {
+      document.querySelectorAll('#evo-filters .pill').forEach(x => x.classList.remove('active'));
+      p.classList.add('active');
+      evoFilter = p.dataset.evo;
+      renderCollection();
+    };
+  });
+}
+function buildOwnFilters(containerId, onChange) {
+  document.querySelectorAll(`#${containerId} .pill`).forEach(p => {
+    p.onclick = () => {
+      document.querySelectorAll(`#${containerId} .pill`).forEach(x => x.classList.remove('active'));
+      p.classList.add('active');
+      onChange(p.dataset.own);
+    };
+  });
+}
+function buildGenFilters(containerId, set, onChange) {
+  const wrap = document.getElementById(containerId);
+  for (const g of GENS) {
+    const el = document.createElement('span');
+    el.className = 'gen-chip';
+    el.textContent = `Gen ${g.label}`;
+    el.title = `#${g.range[0]}–${g.range[1]}`;
+    el.onclick = () => {
+      if (set.has(g.id)) { set.delete(g.id); el.classList.remove('active'); }
+      else { set.add(g.id); el.classList.add('active'); }
+      onChange();
+    };
+    wrap.appendChild(el);
+  }
+}
+
+// ---------- view switching ----------
+function switchKid(k) {
+  currentKid = k;
+  topView = "kid";
+  document.querySelector(`.kid-tab[data-kid="${k}"]`).classList.add('active');
+  document.getElementById('header').className = `h-${k}`;
+  document.getElementById('header-title').textContent = `${KID_LABEL[k]}'s Pokédex`;
+  document.getElementById('subtitle').textContent = `${kidData[k].cards.length} cards · ${ownedByKid[k].size} unique Pokémon`;
+  document.getElementById('tab-collection-count').textContent = ` (${kidData[k].cards.length})`;
+  document.getElementById('kid-view').style.display = 'block';
+  document.getElementById('compare-view').style.display = 'none';
+  document.getElementById('full-view').style.display = 'none';
+  renderCollection();
+  if (currentSubView === 'full') renderKidFullDex();
+}
+
+function showCompare() {
+  topView = "compare";
+  document.getElementById('header').className = 'h-compare';
+  document.getElementById('header-title').textContent = 'Compare Collections';
+  document.getElementById('subtitle').textContent = 'Jameson vs Harper';
+  document.getElementById('kid-view').style.display = 'none';
+  document.getElementById('compare-view').style.display = 'block';
+  document.getElementById('full-view').style.display = 'none';
+  renderCompare();
+}
+
+async function showFull() {
+  topView = "full";
+  document.getElementById('header').className = '';
+  document.getElementById('header-title').textContent = 'Family Pokédex';
+  document.getElementById('subtitle').textContent = 'All 1025 Pokémon, with each kid\'s ownership marked';
+  document.getElementById('kid-view').style.display = 'none';
+  document.getElementById('compare-view').style.display = 'none';
+  document.getElementById('full-view').style.display = 'block';
+  await ensureSpecies();
+  renderFullDex();
+}
+
+async function ensureSpecies() {
+  if (allSpecies.length) return;
+  const cached = loadSpeciesCache();
+  if (cached && cached.length) { allSpecies = cached; return; }
+  try {
+    const data = await fetchJson(`${API}/pokemon-species?limit=1025`);
+    allSpecies = data.results.map((r, i) => ({ id: i + 1, name: r.name }));
+    saveSpeciesCache(allSpecies);
+  } catch { allSpecies = []; }
+}
+
+// ---------- preload pokemon data ----------
+async function loadAllPokemon() {
+  const allNames = new Set();
+  for (const k of KIDS) {
+    for (const c of kidData[k].cards) {
+      if (!c.kind || c.kind === 'pokemon') allNames.add(c.name);
+    }
+  }
+  const names = [...allNames];
+  const BATCH = 8;
+  for (let i = 0; i < names.length; i += BATCH) {
+    const batch = names.slice(i, i + BATCH);
+    await Promise.all(batch.map(n => loadPokemon(n)));
+    if (topView === "kid" && currentSubView === "collection") renderCollection();
+  }
+  // load chains
+  const chainUrls = [...new Set(names.map(n => pokeCache[n]?.chainUrl).filter(Boolean))];
+  for (let i = 0; i < chainUrls.length; i += BATCH) {
+    const batch = chainUrls.slice(i, i + BATCH);
+    await Promise.all(batch.map(u => loadChain(u)));
+    if (topView === "kid" && currentSubView === "collection") renderCollection();
+  }
+  persistCache();
+  if (topView === "compare") renderCompare();
+}
+
+// ---------- collection render ----------
+function renderCollection() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = "";
+  const owned = ownedByKid[currentKid];
+  const cards = kidData[currentKid].cards;
+  const counts = { playable: 0, "to-find": 0, final: 0, standalone: 0, "non-pokemon": 0 };
+  let shown = 0;
+
+  for (const c of cards) {
+    const isPokemon = !c.kind || c.kind === 'pokemon';
+    const p = isPokemon ? pokeCache[c.name] : null;
+    let ev = null;
+    if (isPokemon) {
+      const chain = p?.chainUrl ? chainCache[p.chainUrl] : null;
+      ev = evoStatus(c.name, chain, owned);
+      if (counts[ev.kind] !== undefined) counts[ev.kind]++;
+    } else {
+      counts["non-pokemon"]++;
+    }
+
+    if (searchTerm) {
+      const hay = `${c.display} ${c.name || ''} ${p?.id || ''}`.toLowerCase();
+      if (!hay.includes(searchTerm)) continue;
+    }
+    if (activeTypes.size > 0) {
+      if (!isPokemon) continue;
+      if (!p || !p.types.some(t => activeTypes.has(t))) continue;
+    }
+    if (evoFilter !== "all") {
+      if (evoFilter === "non-pokemon") {
+        if (isPokemon) continue;
+      } else {
+        if (!isPokemon) continue;
+        if (ev && ev.kind !== evoFilter) continue;
+      }
+    }
+
+    grid.appendChild(makeCard(c, p, ev, isPokemon));
+    shown++;
+  }
+  if (!shown) grid.innerHTML = '<div class="empty">No cards match these filters.</div>';
+  renderCollectionStats(counts);
+}
+
+function makeCard(c, p, ev, isPokemon) {
+  const div = document.createElement('div');
+  let cls = 'card';
+  if (!isPokemon) cls += ' non-pokemon';
+  else if (!p) cls += ' loading';
+  else if (ev?.kind === 'playable') cls += ' playable';
+  else if (ev?.kind === 'to-find') cls += ' to-find';
+  else if (ev?.kind === 'final') cls += ' final-form';
+  div.className = cls;
+  div.onclick = () => openModal(c);
+
+  let sprite;
+  if (!isPokemon) {
+    const icon = c.kind === 'energy' ? '⚡' : (c.kind === 'item' ? '🎒' : '👤');
+    sprite = `<div class="sprite-fallback">${icon}</div>`;
+  } else if (p) {
+    sprite = `<img class="sprite" src="${p.sprite}" alt="${c.display}" loading="lazy" onerror="this.style.opacity=0.2">`;
+  } else {
+    sprite = `<div class="skeleton"></div>`;
+  }
+
+  const types = p ? p.types.map(t => `<span class="badge t-${t}">${t}</span>`).join('') : '';
+  const previewSprites = names => names.slice(0,3).map(n => {
+    const np = pokeCache[n];
+    return np ? `<img src="${np.sprite}" title="${n}" alt="${n}">` : '';
+  }).join('');
+
+  let evoTag = '';
+  if (!isPokemon) {
+    evoTag = `<div class="evo-tag non-pokemon">${c.kind?.toUpperCase() || 'OTHER'}${c.category ? ' · ' + c.category : ''}</div>`;
+  } else if (ev) {
+    if (ev.kind === 'playable') {
+      const txt = ev.ownedNext.length === 1 ? `✨ Evolve → ${ev.ownedNext[0]}` : `✨ ${ev.ownedNext.length} evolutions ready`;
+      evoTag = `<div class="evo-tag playable"><span>${txt}</span><span class="next-sprites">${previewSprites(ev.ownedNext)}</span></div>`;
+    } else if (ev.kind === 'to-find') {
+      const txt = ev.nextNames.length === 1 ? `→ Find ${ev.nextNames[0]}` : `→ Find ${ev.nextNames.length} forms`;
+      evoTag = `<div class="evo-tag to-find"><span class="arrow">⚡</span><span>${txt}</span><span class="next-sprites">${previewSprites(ev.missingNext)}</span></div>`;
+    } else if (ev.kind === 'final') {
+      evoTag = `<div class="evo-tag final">★ Final form</div>`;
+    } else {
+      evoTag = `<div class="evo-tag standalone">— No evolutions —</div>`;
+    }
+  }
+
+  div.innerHTML = `
+    ${c.duplicate ? '<div class="corner dup">2nd+</div>' : ''}
+    ${c.uncertain ? '<div class="corner unc">verify?</div>' : ''}
+    ${c.rarity ? '<div class="corner rar">★</div>' : ''}
+    ${!isPokemon ? `<div class="corner kind">${c.kind || 'tcg'}</div>` : ''}
+    ${sprite}
+    <div class="name">${c.display}</div>
+    <div class="dex">${isPokemon ? (p ? '#' + String(p.id).padStart(3,'0') : 'loading…') : (c.category || '')}${c.variant ? ' · ' + c.variant : ''}</div>
+    <div class="types">${types}</div>
+    ${evoTag}
+  `;
+  return div;
+}
+
+function renderCollectionStats(c) {
+  const cards = kidData[currentKid].cards;
+  const total = cards.length;
+  const owned = ownedByKid[currentKid];
+  const dups = cards.filter(card => card.duplicate).length;
+  const html = `
+    <div><b>${total}</b>cards</div>
+    <div><b>${owned.size}</b>unique Pokémon</div>
+    <div><b>${dups}</b>duplicates</div>
+    <div><b>${c.final}</b>at final form</div>
+    <div><b>${c["to-find"]}</b>missing next stage</div>
+    ${c["non-pokemon"] ? `<div><b>${c["non-pokemon"]}</b>trainers/energy</div>` : ''}
+    <div class="evolve-banner"><span class="num">${c.playable}</span><span>evolutions ready to play!</span></div>
+  `;
+  document.getElementById('stats').innerHTML = html;
+}
+
+// ---------- per-kid full pokedex ----------
+async function openKidFullDex() {
+  await ensureSpecies();
+  document.getElementById('tab-full-count').textContent = ` (${ownedByKid[currentKid].size}/${allSpecies.length})`;
+  renderKidFullDex();
+}
+
+function renderKidFullDex() {
+  const grid = document.getElementById('kid-dex-grid');
+  if (!allSpecies.length) return;
+  grid.innerHTML = "";
+  const owned = ownedByKid[currentKid];
+  let shown = 0, ownedShown = 0;
+  for (const s of allSpecies) {
+    if (kidActiveGens.size && !kidActiveGens.has(genFor(s.id))) continue;
+    const isOwned = owned.has(s.name);
+    if (kidOwnFilter === "owned" && !isOwned) continue;
+    if (kidOwnFilter === "missing" && isOwned) continue;
+    if (kidFullSearchTerm) {
+      const hay = `${s.name} ${s.id}`.toLowerCase();
+      if (!hay.includes(kidFullSearchTerm)) continue;
+    }
+    const div = makeTile(s, { jameson: false, harper: false, [currentKid]: isOwned });
+    grid.appendChild(div);
+    shown++;
+    if (isOwned) ownedShown++;
+  }
+  if (!shown) grid.innerHTML = '<div class="empty">No Pokémon match these filters.</div>';
+  const total = allSpecies.length;
+  const totalOwned = owned.size;
+  const pct = ((totalOwned / total) * 100).toFixed(1);
+  document.getElementById('kid-full-stats').innerHTML = `
+    <div><b>${shown}</b>shown</div>
+    <div><b>${ownedShown}</b>owned (filtered)</div>
+    <div><b>${totalOwned} / ${total}</b>${KID_LABEL[currentKid]} has overall</div>
+    <div class="evolve-banner"><span class="num">${pct}%</span><span>of the National Pokédex</span></div>
+  `;
+}
+
+// ---------- combined full pokedex ----------
+function renderFullDex() {
+  const grid = document.getElementById('dex-grid');
+  if (!allSpecies.length) return;
+  grid.innerHTML = "";
+  const oj = ownedByKid.jameson, oh = ownedByKid.harper;
+  let shown = 0, jShown = 0, hShown = 0, bothShown = 0;
+  for (const s of allSpecies) {
+    if (fullActiveGens.size && !fullActiveGens.has(genFor(s.id))) continue;
+    const j = oj.has(s.name), h = oh.has(s.name);
+    const owners = { jameson: j, harper: h };
+    if (fullOwnFilter === "any" && !(j || h)) continue;
+    if (fullOwnFilter === "both" && !(j && h)) continue;
+    if (fullOwnFilter === "missing" && (j || h)) continue;
+    if (fullSearchTerm) {
+      const hay = `${s.name} ${s.id}`.toLowerCase();
+      if (!hay.includes(fullSearchTerm)) continue;
+    }
+    grid.appendChild(makeTile(s, owners));
+    shown++;
+    if (j && h) bothShown++;
+    else if (j) jShown++;
+    else if (h) hShown++;
+  }
+  if (!shown) grid.innerHTML = '<div class="empty">No Pokémon match these filters.</div>';
+  const total = allSpecies.length;
+  const allOwned = new Set([...oj, ...oh]);
+  const pct = ((allOwned.size / total) * 100).toFixed(1);
+  document.getElementById('full-stats').innerHTML = `
+    <div><b>${shown}</b>shown</div>
+    <div><b>${bothShown}</b>both have</div>
+    <div><b>${jShown}</b>only Jameson</div>
+    <div><b>${hShown}</b>only Harper</div>
+    <div><b>${allOwned.size} / ${total}</b>collected as a family</div>
+    <div class="evolve-banner"><span class="num">${pct}%</span><span>of the National Pokédex</span></div>
+  `;
+}
+
+function makeTile(s, owners) {
+  const div = document.createElement('div');
+  const j = owners.jameson, h = owners.harper;
+  let cls = 'tile';
+  if (j && h) cls += ' owned-both';
+  else if (j) cls += ' owned-jameson';
+  else if (h) cls += ' owned-harper';
+  div.className = cls;
+  const display = s.name.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  div.onclick = () => openModal({ name: s.name, display });
+  const badges = `${j ? '<span class="own-badge j" title="Jameson">J</span>' : ''}${h ? '<span class="own-badge h" title="Harper">H</span>' : ''}`;
+  div.innerHTML = `
+    ${(j || h) ? `<div class="own-badges">${badges}</div>` : ''}
+    <img src="${ART(s.id)}" alt="${s.name}" loading="lazy" onerror="this.style.opacity=0.15">
+    <div class="num">#${String(s.id).padStart(4,'0')}</div>
+    <div class="nm">${s.name.replace(/-/g, ' ')}</div>
+  `;
+  return div;
+}
+
+// ---------- compare view ----------
+function renderCompare() {
+  const oj = ownedByKid.jameson, oh = ownedByKid.harper;
+  const both = [...oj].filter(n => oh.has(n)).sort();
+  const onlyJ = [...oj].filter(n => !oh.has(n)).sort();
+  const onlyH = [...oh].filter(n => !oj.has(n)).sort();
+
+  document.getElementById('cnt-both').textContent = both.length;
+  document.getElementById('cnt-jameson').textContent = onlyJ.length;
+  document.getElementById('cnt-harper').textContent = onlyH.length;
+
+  document.getElementById('list-both').innerHTML = both.map(n => compareRow(n, "both")).join('') || '<div class="col-sub">No overlap yet.</div>';
+  document.getElementById('list-jameson').innerHTML = onlyJ.map(n => compareRow(n, "jameson")).join('') || '<div class="col-sub">None unique.</div>';
+  document.getElementById('list-harper').innerHTML = onlyH.map(n => compareRow(n, "harper")).join('') || '<div class="col-sub">None unique.</div>';
+
+  // trade ideas: one kid has the next-evolution of one the other has
+  const trades = [];
+  for (const k of KIDS) {
+    const other = k === 'jameson' ? 'harper' : 'jameson';
+    for (const name of ownedByKid[k]) {
+      const p = pokeCache[name];
+      const chain = p?.chainUrl ? chainCache[p.chainUrl] : null;
+      if (!chain) continue;
+      const path = findInChain(chain, name);
+      if (!path) continue;
+      const here = path[path.length - 1];
+      for (const child of here.evolves_to) {
+        if (ownedByKid[other].has(child.name) && !ownedByKid[k].has(child.name)) {
+          trades.push({ giver: other, taker: k, base: name, evolved: child.name });
+        }
+      }
+    }
+  }
+  // dedupe: same pair shouldn't appear twice
+  const seen = new Set();
+  const dedupedTrades = trades.filter(t => {
+    const key = `${t.giver}-${t.taker}-${t.base}-${t.evolved}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  document.getElementById('cnt-trade').textContent = dedupedTrades.length;
+  document.getElementById('list-trade').innerHTML = dedupedTrades.map(t => {
+    const pBase = pokeCache[t.base], pEv = pokeCache[t.evolved];
+    return `
+      <div class="trade-row" onclick='openModal(${JSON.stringify({ name: t.evolved, display: t.evolved.replace(/-/g,' ').replace(/\b\w/g, c => c.toUpperCase()) })})'>
+        <span class="who ${t.taker[0]}">${KID_LABEL[t.taker]}</span>
+        ${pBase ? `<img src="${pBase.sprite}" alt="${t.base}">` : ''}
+        <span class="nm">${t.base}</span>
+        <span class="arrow">→</span>
+        ${pEv ? `<img src="${pEv.sprite}" alt="${t.evolved}">` : ''}
+        <span class="nm">${t.evolved}</span>
+        <span class="meta" style="margin-left:auto;color:var(--muted);font-size:12px">${KID_LABEL[t.giver]} has the evolution</span>
+      </div>
+    `;
+  }).join('') || '<div class="col-sub">No cross-evolution opportunities found yet.</div>';
+
+  // top-level compare stats
+  const total = oj.size + oh.size;
+  const overlap = both.length;
+  const overlapPct = total ? ((overlap * 2 / total) * 100).toFixed(0) : 0;
+  document.getElementById('compare-stats').innerHTML = `
+    <div><b>${oj.size}</b>Jameson unique</div>
+    <div><b>${oh.size}</b>Harper unique</div>
+    <div><b>${both.length}</b>both have</div>
+    <div><b>${onlyJ.length + onlyH.length + both.length}</b>combined unique</div>
+    <div class="evolve-banner"><span class="num">${overlapPct}%</span><span>collection overlap</span></div>
+  `;
+}
+
+function compareRow(name, kind) {
+  const p = pokeCache[name];
+  const display = name.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const dex = p ? `#${String(p.id).padStart(3,'0')}` : '';
+  const sprite = p ? `<img src="${p.sprite}" alt="${name}">` : `<div style="width:40px;height:40px"></div>`;
+  return `<div class="compare-row" onclick='openModal(${JSON.stringify({ name, display })})'>
+    ${sprite}
+    <div>
+      <div class="nm">${display}</div>
+      <div class="meta">${dex}</div>
+    </div>
+  </div>`;
+}
+
+// ---------- modal ----------
+async function openModal(c) {
+  const overlay = document.getElementById('overlay');
+  const m = document.getElementById('modal');
+  overlay.classList.add('show');
+
+  const isPokemon = !c.kind || c.kind === 'pokemon';
+  if (!isPokemon) {
+    m.innerHTML = `
+      <button class="close-btn" onclick="closeModal()">×</button>
+      <div class="modal-head">
+        <div class="sprite-fallback" style="font-size:90px">${c.kind === 'energy' ? '⚡' : c.kind === 'item' ? '🎒' : '👤'}</div>
+        <div>
+          <h2>${c.display}</h2>
+          <div class="meta">${c.kind?.toUpperCase()}${c.category ? ' · ' + c.category : ''}${c.src ? ` · <a href="SourceImages/${c.src}" target="_blank" class="src-link">📷 source</a>` : ''}</div>
+        </div>
+      </div>
+      ${c.note ? `<section><h3>Note</h3><div class="flavor">${c.note}</div></section>` : ''}
+    `;
+    return;
+  }
+
+  const p = await loadPokemon(c.name);
+  const chain = p?.chainUrl ? await loadChain(p.chainUrl) : null;
+
+  const sprite = p ? `<img src="${p.sprite}" alt="${c.display}">` : '';
+  const types = p ? p.types.map(t => `<span class="badge t-${t}">${t}</span>`).join('') : '';
+
+  m.innerHTML = `
+    <button class="close-btn" onclick="closeModal()">×</button>
+    <div class="modal-head">
+      ${sprite}
+      <div>
+        <h2>${c.display}</h2>
+        <div class="meta">${p ? '#' + String(p.id).padStart(3,'0') : ''}${p?.genus ? ' · ' + p.genus : ''}${c.rarity ? ' · ' + c.rarity : ''}${c.duplicate ? ' · duplicate copy' : ''}${c.variant ? ' · ' + c.variant : ''}${c.src ? ` · <a href="SourceImages/${c.src}" target="_blank" class="src-link">📷 source</a>` : ''}</div>
+        <div class="types" style="margin-top:10px; justify-content:flex-start; display:flex; gap:4px; flex-wrap:wrap">${types}</div>
+      </div>
+    </div>
+    <section>
+      <h3>Evolution chain</h3>
+      <div class="chain-tree">${chain ? renderChainTree(chain, c.name) : '<em style="color:var(--muted)">No evolution data.</em>'}</div>
+    </section>
+    ${p ? `
+      <section>
+        <h3>Vitals</h3>
+        <div class="vitals">
+          <div class="vital"><div class="lbl">Height</div><div class="val">${(p.height/10).toFixed(1)} m</div></div>
+          <div class="vital"><div class="lbl">Weight</div><div class="val">${(p.weight/10).toFixed(1)} kg</div></div>
+          <div class="vital"><div class="lbl">Generation</div><div class="val">${p.generation || '—'}</div></div>
+          ${p.habitat ? `<div class="vital"><div class="lbl">Habitat</div><div class="val">${p.habitat}</div></div>` : ''}
+          <div class="vital" style="grid-column: 1/-1"><div class="lbl">Abilities</div><div class="val" style="font-size:14px">${p.abilities.map(a => a.replace(/-/g,' ')).join(', ')}</div></div>
+        </div>
+      </section>
+      <section>
+        <h3>Base stats</h3>
+        <div>${p.stats.map(s => `
+          <div class="stat-row">
+            <span class="stat-name">${s.name.replace(/-/g,' ')}</span>
+            <span class="stat-val">${s.value}</span>
+            <div class="stat-bar"><div class="stat-bar-fill" style="width:${Math.min(100, s.value/200*100)}%"></div></div>
+          </div>`).join('')}</div>
+      </section>
+      ${p.flavor ? `<section><h3>Pokédex entry</h3><div class="flavor">${p.flavor}</div></section>` : ''}
+    ` : '<div style="color:var(--muted)">Loading details…</div>'}
+    ${c.note ? `<section><h3>Card note</h3><div class="flavor">${c.note}</div></section>` : ''}
+  `;
+}
+
+function renderChainTree(chain, currentName) {
+  const oj = ownedByKid.jameson, oh = ownedByKid.harper;
+  function nodeHtml(node) {
+    const p = pokeCache[node.name];
+    const j = oj.has(node.name), h = oh.has(node.name);
+    const current = node.name === currentName;
+    let cls = 'chain-node';
+    if (j && h) cls += ' owned-both';
+    else if (j) cls += ' owned-jameson';
+    else if (h) cls += ' owned-harper';
+    if (current) cls += ' current';
+    const img = p ? `<img src="${p.sprite}" alt="${node.name}" onerror="this.style.opacity=0.2">` : '';
+    const pips = (j || h) ? `<div class="own-pips">${j ? '<span class="own-pip j">J</span>' : ''}${h ? '<span class="own-pip h">H</span>' : ''}</div>` : '';
+    return `<div class="${cls}">${pips}${img}<div class="lab">${node.name.replace(/-/g,' ')}</div></div>`;
+  }
+  function walk(node) {
+    let html = nodeHtml(node);
+    if (node.evolves_to.length === 1) {
+      html += `<span class="chain-arrow">→</span>` + walk(node.evolves_to[0]);
+      return html;
+    }
+    if (node.evolves_to.length > 1) {
+      html += `<span class="chain-arrow">→</span><div style="display:flex;flex-direction:column;gap:8px">` +
+        node.evolves_to.map(c => `<div class="chain-row">${walk(c)}</div>`).join('') + `</div>`;
+    }
+    return html;
+  }
+  return `<div class="chain-row">${walk(chain)}</div>`;
+}
+
+function closeModal() { document.getElementById('overlay').classList.remove('show'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+init();
+</script>
+</body>
+</html>
