@@ -2,11 +2,17 @@
 
 Family Pokémon TCG collection tracker. Static single-page app — no build step, no backend.
 
+![Per-kid collection view](docs/collection.png)
+
 Loads each kid's collection from `kids/<name>.json`, fetches sprites / types / evolution chains live from [PokéAPI](https://pokeapi.co/), and renders three views:
 
-- **Per-kid collection** — cards grouped by Pokémon, with playable evolutions highlighted in green
+- **Per-kid collection** — cards grouped by Pokémon, with playable evolutions highlighted in green (a card glows green when its next-stage evolution is also in the collection — i.e. the kid can actually play the evolution)
 - **Compare** — what both kids have, what each has uniquely, and cross-evolution trade ideas
 - **Full Pokédex** — all 1025 species with per-kid ownership badges
+
+| Compare collections | Full Pokédex (per-kid ownership) |
+|---|---|
+| ![Compare view](docs/compare.png) | ![Full Pokédex view](docs/full-pokedex.png) |
 
 ## Running locally
 
