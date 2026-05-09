@@ -10,6 +10,7 @@ Loads each kid's collection from `kids/<name>.json`, fetches sprites / types / e
 
 - **Per-kid collection** — cards grouped by Pokémon, with playable evolutions highlighted in green (a card glows green when its next-stage evolution is also in the collection — i.e. the kid can actually play the evolution)
 - **Compare** — what both kids have, what each has uniquely, and cross-evolution trade ideas
+- **Decks** — top tournament decks scraped from [Limitless TCG](https://play.limitlesstcg.com/decks?format=standard), ranked by how many of each kid's Pokémon match the recipe. Click a deck to see the full 60-card list with each row marked owned (✓) or missing (○).
 - **Full Pokédex** — all 1025 species with per-kid ownership badges
 
 | Compare collections | Full Pokédex (per-kid ownership) |
@@ -174,12 +175,24 @@ If `number` is present, the app fetches the real card image and TCG-specific dat
 
 These render with a generic icon (⚡ / 🎒 / 👤) instead of a sprite, skip the PokéAPI fetch, and live behind the **Trainers/Energy** filter.
 
+## Refreshing deck recipes
+
+The Decks tab reads from `decks/standard.json`, which is committed to the repo. To refresh it from the latest Limitless TCG meta:
+
+```bash
+node scripts/refresh-decks.mjs
+```
+
+Requires Node 18+. No npm install — uses built-in fetch. Takes ~2 minutes (it's gentle with Limitless's servers). Commit the regenerated file when you're happy.
+
 ## Project layout
 
 ```
-index.html            — single-file app
-kids/<name>.json      — one file per kid
-SourceImages/<name>/  — original card photos
+index.html              — single-file app
+kids/<name>.json        — one file per kid
+SourceImages/<name>/    — original card photos
+decks/standard.json     — scraped tournament decks (refresh with the script)
+scripts/refresh-decks.mjs — Node scraper for the deck file
 ```
 
 PokéAPI responses and the species list are cached in `localStorage` so reloads are instant. Bump the cache key constants in `index.html` if you ever need to invalidate.

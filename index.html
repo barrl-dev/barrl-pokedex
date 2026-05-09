@@ -457,6 +457,68 @@
 
   .loading-spinner { text-align: center; padding: 40px; color: var(--muted); }
 
+  /* Decks view */
+  .decks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 14px;
+  }
+  .deck-card {
+    background: var(--panel); border-radius: 12px; padding: 14px;
+    cursor: pointer; border: 2px solid transparent;
+    transition: transform 0.12s, box-shadow 0.12s, border-color 0.12s;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .deck-card:hover { transform: translateY(-2px); box-shadow: 0 8px 18px rgba(0,0,0,0.3); border-color: rgba(255,255,255,0.1); }
+  .deck-card.high { border-color: var(--owned); }
+  .deck-card.med  { border-color: var(--accent); }
+  .deck-card .head { display: flex; align-items: center; gap: 12px; }
+  .deck-card .head img { width: 48px; height: 48px; }
+  .deck-card .head .name { font-weight: 700; font-size: 15px; flex: 1; text-transform: capitalize; line-height: 1.2; }
+  .deck-card .pct { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .deck-card.high .pct  { color: var(--owned); }
+  .deck-card.med .pct   { color: var(--accent); }
+  .deck-card.low .pct   { color: var(--muted); }
+  .deck-card .progress {
+    height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden;
+  }
+  .deck-card .progress-fill {
+    height: 100%; background: linear-gradient(90deg, var(--accent-2), var(--owned));
+    transition: width 0.4s ease;
+  }
+  .deck-card .meta { font-size: 12px; color: var(--muted); }
+
+  .deck-modal-list {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px; margin-top: 10px;
+  }
+  .deck-section {
+    background: var(--panel-2); border-radius: 10px; padding: 12px;
+  }
+  .deck-section h4 {
+    margin: 0 0 10px; font-size: 12px; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--muted);
+    display: flex; justify-content: space-between;
+  }
+  .deck-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 0; font-size: 13px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .deck-row:last-child { border-bottom: none; }
+  .deck-row .cnt {
+    font-weight: 700; min-width: 24px; text-align: right;
+    color: var(--muted); font-variant-numeric: tabular-nums;
+  }
+  .deck-row .nm { flex: 1; line-height: 1.25; }
+  .deck-row .ind {
+    font-size: 14px; flex-shrink: 0;
+  }
+  .deck-row.have { background: rgba(67,209,126,0.06); }
+  .deck-row.have .ind { color: var(--owned); }
+  .deck-row.have .cnt { color: var(--owned); }
+  .deck-row.miss .ind { color: var(--muted); opacity: 0.6; }
+
   /* Compare view */
   .compare-grid {
     display: grid;
@@ -544,6 +606,7 @@
   <button class="kid-tab dot active" data-kid="jameson">Jameson<span class="count" id="kt-jameson"></span></button>
   <button class="kid-tab dot" data-kid="harper">Harper<span class="count" id="kt-harper"></span></button>
   <button class="kid-tab" data-kid="compare">Compare</button>
+  <button class="kid-tab" data-kid="decks">Decks</button>
   <button class="kid-tab" data-kid="full">Full Pokédex</button>
 </div>
 
@@ -617,6 +680,23 @@
   </main>
 </div>
 
+<!-- Decks view -->
+<div class="kid-section" id="decks-view" style="display:none">
+  <div class="controls">
+    <input type="search" id="decks-search" placeholder="Search decks by name…">
+    <div class="pill-group" id="decks-kid-picker">
+      <span class="pill active" data-deckkid="jameson" style="border-color:var(--jameson);color:var(--jameson)">Jameson's match</span>
+      <span class="pill" data-deckkid="harper" style="border-color:var(--harper);color:var(--harper)">Harper's match</span>
+    </div>
+  </div>
+  <div class="stats" id="decks-stats"></div>
+  <main>
+    <div class="decks-grid" id="decks-grid">
+      <div class="loading-spinner">Loading deck recipes from Limitless TCG…</div>
+    </div>
+  </main>
+</div>
+
 <!-- Full Pokédex view (combined ownership) -->
 <div class="kid-section" id="full-view" style="display:none">
   <div class="controls">
@@ -664,7 +744,12 @@ let allSpecies = [];
 
 let currentKid = "jameson";
 let currentSubView = "collection";
-let topView = "kid";              // "kid" | "compare" | "full"
+let topView = "kid";              // "kid" | "compare" | "decks" | "full"
+
+// Decks state
+let allDecks = null;              // { format, decks: [...] } from decks/standard.json
+let deckKid = "jameson";          // which kid's match to show
+let decksSearchTerm = "";
 
 let activeTypes = new Set();
 let evoFilter = "all";
@@ -883,6 +968,15 @@ async function init() {
   document.getElementById('search').addEventListener('input', e => { searchTerm = e.target.value.toLowerCase(); renderCollection(); });
   document.getElementById('kid-full-search').addEventListener('input', e => { kidFullSearchTerm = e.target.value.toLowerCase(); renderKidFullDex(); });
   document.getElementById('full-search').addEventListener('input', e => { fullSearchTerm = e.target.value.toLowerCase(); renderFullDex(); });
+  document.getElementById('decks-search').addEventListener('input', e => { decksSearchTerm = e.target.value.toLowerCase(); renderDecks(); });
+  document.querySelectorAll('#decks-kid-picker .pill').forEach(p => {
+    p.onclick = () => {
+      document.querySelectorAll('#decks-kid-picker .pill').forEach(x => x.classList.remove('active'));
+      p.classList.add('active');
+      deckKid = p.dataset.deckkid;
+      renderDecks();
+    };
+  });
 
   switchKid(currentKid);
   loadAllPokemon();
@@ -895,6 +989,7 @@ function buildKidPicker() {
       document.querySelectorAll('.kid-tab').forEach(x => x.classList.remove('active'));
       t.classList.add('active');
       if (k === 'compare') showCompare();
+      else if (k === 'decks') showDecks();
       else if (k === 'full') showFull();
       else switchKid(k);
     };
@@ -974,6 +1069,7 @@ function switchKid(k) {
   document.getElementById('tab-collection-count').textContent = ` (${kidData[k].cards.length})`;
   document.getElementById('kid-view').style.display = 'block';
   document.getElementById('compare-view').style.display = 'none';
+  document.getElementById('decks-view').style.display = 'none';
   document.getElementById('full-view').style.display = 'none';
   renderCollection();
   if (currentSubView === 'full') renderKidFullDex();
@@ -986,6 +1082,7 @@ function showCompare() {
   document.getElementById('subtitle').textContent = 'Jameson vs Harper';
   document.getElementById('kid-view').style.display = 'none';
   document.getElementById('compare-view').style.display = 'block';
+  document.getElementById('decks-view').style.display = 'none';
   document.getElementById('full-view').style.display = 'none';
   renderCompare();
 }
@@ -997,9 +1094,30 @@ async function showFull() {
   document.getElementById('subtitle').textContent = 'All 1025 Pokémon, with each kid\'s ownership marked';
   document.getElementById('kid-view').style.display = 'none';
   document.getElementById('compare-view').style.display = 'none';
+  document.getElementById('decks-view').style.display = 'none';
   document.getElementById('full-view').style.display = 'block';
   await ensureSpecies();
   renderFullDex();
+}
+
+async function showDecks() {
+  topView = "decks";
+  document.getElementById('header').className = '';
+  document.getElementById('header-title').textContent = 'Deck Recipes';
+  document.getElementById('subtitle').textContent = "Top tournament decks — see how close each kid is to building one";
+  document.getElementById('kid-view').style.display = 'none';
+  document.getElementById('compare-view').style.display = 'none';
+  document.getElementById('full-view').style.display = 'none';
+  document.getElementById('decks-view').style.display = 'block';
+  if (!allDecks) {
+    try {
+      allDecks = await fetchJson('decks/standard.json');
+    } catch (e) {
+      document.getElementById('decks-grid').innerHTML = `<div class="empty">Could not load <code>decks/standard.json</code>: ${e.message}<br>Run <code>node scripts/refresh-decks.mjs</code> to generate it.</div>`;
+      return;
+    }
+  }
+  renderDecks();
 }
 
 async function ensureSpecies() {
@@ -1336,6 +1454,195 @@ function renderCompare() {
     <div><b>${both.length}</b>both have</div>
     <div><b>${onlyJ.length + onlyH.length + both.length}</b>combined unique</div>
     <div class="evolve-banner"><span class="num">${overlapPct}%</span><span>collection overlap</span></div>
+  `;
+}
+
+// ---------- decks view ----------
+function normalizeDeckName(s) {
+  // Convert a deck-slot name like "Lillie's Clefairy ex" → API-shaped "clefairy"
+  let n = s.toLowerCase().trim();
+  // strip variant suffixes
+  n = n.replace(/\s+(ex|v|vmax|vstar|vunion|gx|prime|break)$/i, "");
+  // strip "X's " trainer-themed prefix
+  n = n.replace(/^[a-z]+(?:'s)\s+/i, "");
+  // strip well-known regional / variant prefixes
+  n = n.replace(/^(galarian|alolan|hisuian|paldean|origin forme|bloodmoon|dawn wings|dusk mane|ultra)\s+/, "");
+  // punctuation → drop, spaces → hyphens
+  n = n.replace(/['.,!]/g, "").replace(/\s+/g, "-");
+  return n;
+}
+
+const COMMON_TRAINERS_AND_ENERGY = new Set(); // built from owned cards at render time
+
+function buildKnownNonPokemonSet() {
+  COMMON_TRAINERS_AND_ENERGY.clear();
+  for (const k of KIDS) {
+    for (const c of kidData[k].cards) {
+      if (c.kind === 'trainer' || c.kind === 'item' || c.kind === 'energy') {
+        COMMON_TRAINERS_AND_ENERGY.add(c.display.toLowerCase());
+      }
+    }
+  }
+}
+
+function isPokemonSlot(slot) {
+  // Use supertype if present, else fall back to heuristic
+  if (slot.supertype) return slot.supertype === 'Pokémon';
+  const n = slot.name.toLowerCase();
+  if (/\benergy\b/.test(n)) return false;
+  return true;
+}
+
+function classifyOwnership(slot, ownedSet, kidCards) {
+  const isPokemon = isPokemonSlot(slot);
+  if (isPokemon) {
+    const apiName = normalizeDeckName(slot.name);
+    return {
+      isPokemon: true,
+      owned: ownedSet.has(apiName),
+      apiName
+    };
+  }
+  // trainer/energy: match by display name
+  const lower = slot.name.toLowerCase();
+  const match = kidCards.find(c => (c.kind === 'trainer' || c.kind === 'item' || c.kind === 'energy') && c.display.toLowerCase() === lower);
+  return { isPokemon: false, owned: !!match };
+}
+
+function deckMatchScore(deck, kid) {
+  const ownedSet = ownedByKid[kid];
+  const kidCards = kidData[kid].cards;
+  let pokemonOwned = 0, pokemonTotal = 0;
+  let trainerOwned = 0, trainerTotal = 0;
+  let energyOwned = 0, energyTotal = 0;
+  for (const slot of deck.cards) {
+    const cls = classifyOwnership(slot, ownedSet, kidCards);
+    if (slot.supertype === 'Pokémon' || (cls.isPokemon && !slot.supertype)) {
+      pokemonTotal += slot.count;
+      if (cls.owned) pokemonOwned += slot.count;
+    } else if (slot.supertype === 'Trainer') {
+      trainerTotal += slot.count;
+      if (cls.owned) trainerOwned += slot.count;
+    } else {
+      energyTotal += slot.count;
+      if (cls.owned) energyOwned += slot.count;
+    }
+  }
+  // Pokemon match dominates the score (it's what kids really care about)
+  const total = pokemonTotal || 1;
+  const score = pokemonOwned / total;
+  return { score, pokemonOwned, pokemonTotal, trainerOwned, trainerTotal, energyOwned, energyTotal };
+}
+
+function renderDecks() {
+  buildKnownNonPokemonSet();
+  const grid = document.getElementById('decks-grid');
+  if (!allDecks?.decks?.length) { grid.innerHTML = '<div class="empty">No decks loaded.</div>'; return; }
+
+  const enriched = allDecks.decks.map(d => ({ ...d, match: deckMatchScore(d, deckKid) }));
+  enriched.sort((a, b) => b.match.score - a.match.score);
+
+  let shown = 0;
+  grid.innerHTML = "";
+  for (const d of enriched) {
+    if (decksSearchTerm && !d.name.toLowerCase().includes(decksSearchTerm) && !d.slug.includes(decksSearchTerm)) continue;
+    const pct = Math.round(d.match.score * 100);
+    const tier = pct >= 50 ? 'high' : pct >= 20 ? 'med' : 'low';
+    const card = document.createElement('div');
+    card.className = `deck-card ${tier}`;
+    card.onclick = () => openDeckModal(d);
+    card.innerHTML = `
+      <div class="head">
+        ${d.icon ? `<img src="${d.icon}" alt="${d.name}" onerror="this.style.opacity=0.2">` : ''}
+        <div class="name">${d.name}</div>
+        <div class="pct">${pct}%</div>
+      </div>
+      <div class="progress"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <div class="meta">
+        ${d.match.pokemonOwned}/${d.match.pokemonTotal} Pokémon owned · ${d.cards.length} unique slots · 60 cards
+      </div>
+    `;
+    grid.appendChild(card);
+    shown++;
+  }
+  if (!shown) grid.innerHTML = '<div class="empty">No decks match the search.</div>';
+
+  const best = enriched.slice(0, 3);
+  document.getElementById('decks-stats').innerHTML = `
+    <div><b>${allDecks.decks.length}</b>deck recipes</div>
+    <div><b>${best[0] ? Math.round(best[0].match.score * 100) : 0}%</b>top match for ${KID_LABEL[deckKid]}</div>
+    <div>closest builds: ${best.map(d => `<span class="badge" style="background:var(--panel-2);color:var(--text)">${d.name}</span>`).join(' ')}</div>
+    <div style="margin-left:auto;font-size:11px">scraped from <a class="src-link" href="${allDecks.source}" target="_blank">limitless TCG</a> · ${new Date(allDecks.fetched_at).toLocaleDateString()}</div>
+  `;
+}
+
+function openDeckModal(deck) {
+  const overlay = document.getElementById('overlay');
+  const m = document.getElementById('modal');
+  overlay.classList.add('show');
+  const ownedSet = ownedByKid[deckKid];
+  const kidCards = kidData[deckKid].cards;
+
+  const sections = ['Pokémon', 'Trainer', 'Energy'];
+  const grouped = {};
+  for (const s of sections) grouped[s] = deck.cards.filter(c => (c.supertype || (isPokemonSlot(c) ? 'Pokémon' : 'Energy')) === s);
+  // anything with unknown supertype that didn't classify
+  const remainder = deck.cards.filter(c => !sections.some(s => grouped[s].includes(c)));
+  if (remainder.length) grouped['Other'] = remainder;
+
+  const renderSlot = (slot) => {
+    const cls = classifyOwnership(slot, ownedSet, kidCards);
+    const status = cls.owned ? 'have' : 'miss';
+    const ind = cls.owned ? '✓' : '○';
+    return `<div class="deck-row ${status}">
+      <span class="cnt">${slot.count}×</span>
+      <span class="nm">${slot.name}<span style="color:var(--muted);font-size:11px"> · ${slot.set}-${slot.number}</span></span>
+      <span class="ind">${ind}</span>
+    </div>`;
+  };
+
+  const sectionHtml = (label, slots) => {
+    if (!slots?.length) return '';
+    const total = slots.reduce((s, c) => s + c.count, 0);
+    const owned = slots.filter(s => classifyOwnership(s, ownedSet, kidCards).owned).reduce((s, c) => s + c.count, 0);
+    return `
+      <div class="deck-section">
+        <h4><span>${label}</span><span>${owned}/${total}</span></h4>
+        ${slots.map(renderSlot).join('')}
+      </div>
+    `;
+  };
+
+  const match = deckMatchScore(deck, deckKid);
+  const pct = Math.round(match.score * 100);
+  m.innerHTML = `
+    <button class="close-btn" onclick="closeModal()">×</button>
+    <div class="modal-head">
+      ${deck.icon ? `<img src="${deck.icon}" alt="${deck.name}" style="width:120px;height:120px">` : ''}
+      <div>
+        <h2>${deck.name}</h2>
+        <div class="meta">${KID_LABEL[deckKid]}'s match: <b style="color:${pct >= 50 ? 'var(--owned)' : pct >= 20 ? 'var(--accent)' : 'var(--muted)'}">${pct}%</b> · ${match.pokemonOwned}/${match.pokemonTotal} Pokémon · <a href="${deck.source}" target="_blank" class="src-link">decklist source</a></div>
+        <div style="margin-top:10px"><div class="progress" style="background:var(--panel-2);height:10px;border-radius:5px;overflow:hidden"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--accent-2),var(--owned))"></div></div></div>
+      </div>
+    </div>
+    <section>
+      <h3>Decklist</h3>
+      <div class="deck-modal-list">
+        ${sectionHtml('Pokémon', grouped['Pokémon'])}
+        ${sectionHtml('Trainer', grouped['Trainer'])}
+        ${sectionHtml('Energy', grouped['Energy'])}
+        ${grouped['Other'] ? sectionHtml('Other', grouped['Other']) : ''}
+      </div>
+    </section>
+    <section>
+      <h3>How matching works</h3>
+      <div class="flavor">
+        Pokémon are matched by name only — exact set/print isn't required, so any Charmander counts as a Charmander.
+        Trainers and Energy are matched against the trainer/energy cards in ${KID_LABEL[deckKid]}'s collection by exact display name.
+        The match % above is based on Pokémon count (since that's the spine of the deck);
+        trainers and energy are tracked separately.
+      </div>
+    </section>
   `;
 }
 
