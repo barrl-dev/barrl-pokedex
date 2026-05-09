@@ -199,6 +199,14 @@
     image-rendering: -webkit-optimize-contrast;
     filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4));
   }
+  .card .tcg-art {
+    width: 100%; max-width: 170px; height: auto;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    display: block; margin: 0 auto;
+    aspect-ratio: 245 / 342;
+    object-fit: cover;
+  }
   .card .sprite-fallback {
     width: 130px; height: 130px;
     display: flex; align-items: center; justify-content: center;
@@ -636,8 +644,10 @@
 <script>
 const ALL_TYPES = ["normal","fire","water","electric","grass","ice","fighting","poison","ground","flying","psychic","bug","rock","ghost","dragon","dark","steel","fairy"];
 const API = "https://pokeapi.co/api/v2";
+const TCG_API = "https://api.pokemontcg.io/v2";
 const ART = id => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
 const CACHE_KEY = "pokedex-cache-v2";
+const TCG_CACHE_KEY = "pokedex-tcg-cache-v1";
 const SPECIES_KEY = "pokedex-species-v1";
 
 const KIDS = ["jameson", "harper"];
@@ -649,6 +659,7 @@ let kidData = {};                 // id → { owner, cards }
 let ownedByKid = {};              // id → Set(name) of owned pokemon (excludes non-pokemon)
 let pokeCache = {};
 let chainCache = {};
+let tcgCache = {};                // "set-number" → tcg card data (image, attacks, hp, etc.)
 let allSpecies = [];
 
 let currentKid = "jameson";
@@ -686,8 +697,14 @@ try {
   pokeCache = saved.poke || {};
   chainCache = saved.chain || {};
 } catch {}
+try {
+  tcgCache = JSON.parse(localStorage.getItem(TCG_CACHE_KEY) || "{}");
+} catch {}
 function persistCache() {
   try { localStorage.setItem(CACHE_KEY, JSON.stringify({ poke: pokeCache, chain: chainCache })); } catch {}
+}
+function persistTcgCache() {
+  try { localStorage.setItem(TCG_CACHE_KEY, JSON.stringify(tcgCache)); } catch {}
 }
 function loadSpeciesCache() {
   try { return JSON.parse(localStorage.getItem(SPECIES_KEY) || "null"); } catch { return null; }
@@ -739,6 +756,77 @@ async function loadChain(url) {
 }
 function parseChain(node) {
   return { name: node.species.name, evolves_to: (node.evolves_to || []).map(parseChain) };
+}
+
+// ---------- pokemontcg.io ----------
+function tcgKey(card) {
+  if (!card.number) return null;
+  return card.set ? `${card.set}-${card.number}` : `?-${card.name || card.display}-${card.number}`;
+}
+async function loadTcgCard(card) {
+  const key = tcgKey(card);
+  if (!key) return null;
+  if (tcgCache[key] !== undefined) return tcgCache[key];
+  let result = null;
+  try {
+    if (card.set) {
+      // direct lookup
+      const r = await fetch(`${TCG_API}/cards/${card.set}-${card.number}`);
+      if (r.ok) {
+        const d = await r.json();
+        result = simplifyTcgCard(d.data);
+      }
+    } else {
+      // search by name + number
+      const q = card.name
+        ? `name:"${card.name}" number:${card.number}`
+        : `number:${card.number}`;
+      const r = await fetch(`${TCG_API}/cards?q=${encodeURIComponent(q)}&pageSize=5`);
+      if (r.ok) {
+        const d = await r.json();
+        if (d.data && d.data.length) result = simplifyTcgCard(d.data[0]);
+      }
+    }
+  } catch (e) {
+    console.warn("tcg fetch failed", card, e);
+  }
+  tcgCache[key] = result;  // cache nulls too — don't retry on miss
+  return result;
+}
+function simplifyTcgCard(d) {
+  return {
+    id: d.id,
+    name: d.name,
+    image: d.images?.large || d.images?.small,
+    imageSmall: d.images?.small,
+    hp: d.hp,
+    types: d.types || [],
+    subtypes: d.subtypes || [],
+    supertype: d.supertype,
+    rarity: d.rarity,
+    setName: d.set?.name,
+    setSeries: d.set?.series,
+    setReleaseDate: d.set?.releaseDate,
+    setSymbol: d.set?.images?.symbol,
+    number: d.number,
+    artist: d.artist,
+    attacks: (d.attacks || []).map(a => ({
+      name: a.name,
+      cost: a.cost || [],
+      damage: a.damage,
+      text: a.text
+    })),
+    abilities: d.abilities || [],
+    weaknesses: d.weaknesses || [],
+    resistances: d.resistances || [],
+    retreatCost: d.retreatCost?.length || 0,
+    flavorText: d.flavorText,
+    legalities: d.legalities
+  };
+}
+function getTcgFromCache(card) {
+  const key = tcgKey(card);
+  return key ? tcgCache[key] : null;
 }
 function findInChain(node, name, path = []) {
   if (node.name === name) return [...path, node];
@@ -928,9 +1016,11 @@ async function ensureSpecies() {
 // ---------- preload pokemon data ----------
 async function loadAllPokemon() {
   const allNames = new Set();
+  const allTcgCards = [];
   for (const k of KIDS) {
     for (const c of kidData[k].cards) {
       if (!c.kind || c.kind === 'pokemon') allNames.add(c.name);
+      if (c.number) allTcgCards.push(c);
     }
   }
   const names = [...allNames];
@@ -948,6 +1038,13 @@ async function loadAllPokemon() {
     if (topView === "kid" && currentSubView === "collection") renderCollection();
   }
   persistCache();
+  // load TCG card data (slower, lower priority — happens after sprites/types)
+  for (let i = 0; i < allTcgCards.length; i += BATCH) {
+    const batch = allTcgCards.slice(i, i + BATCH);
+    await Promise.all(batch.map(c => loadTcgCard(c)));
+    if (topView === "kid" && currentSubView === "collection") renderCollection();
+  }
+  persistTcgCache();
   if (topView === "compare") renderCompare();
 }
 
@@ -1008,7 +1105,10 @@ function makeCard(c, p, ev, isPokemon) {
   div.onclick = () => openModal(c);
 
   let sprite;
-  if (!isPokemon) {
+  const tcg = getTcgFromCache(c);
+  if (tcg && tcg.image) {
+    sprite = `<img class="tcg-art" src="${tcg.image}" alt="${c.display}" loading="lazy" onerror="this.style.opacity=0.2">`;
+  } else if (!isPokemon) {
     const icon = c.kind === 'energy' ? '⚡' : (c.kind === 'item' ? '🎒' : '👤');
     sprite = `<div class="sprite-fallback">${icon}</div>`;
   } else if (p) {
@@ -1254,22 +1354,83 @@ function compareRow(name, kind) {
 }
 
 // ---------- modal ----------
+const TCG_ENERGY_GLYPH = {
+  Grass: '🟢', Fire: '🔥', Water: '💧', Lightning: '⚡', Psychic: '🔮',
+  Fighting: '✊', Darkness: '🌑', Metal: '⚙️', Fairy: '✨', Dragon: '🐉',
+  Colorless: '⚪'
+};
+function renderTcgCost(cost) {
+  if (!cost || !cost.length) return '<span style="color:var(--muted)">free</span>';
+  return cost.map(t => `<span title="${t}" class="badge" style="background:var(--panel-2);color:var(--text)">${TCG_ENERGY_GLYPH[t] || ''} ${t}</span>`).join(' ');
+}
+function renderTcgSection(tcg) {
+  if (!tcg) return '';
+  const attacks = tcg.attacks?.length ? `
+    <h3>Attacks</h3>
+    ${tcg.attacks.map(a => `
+      <div style="background:var(--panel-2);border-radius:8px;padding:10px 12px;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+          <div style="display:flex;gap:4px;flex-wrap:wrap">${renderTcgCost(a.cost)}</div>
+          <div style="font-weight:700;flex:1">${a.name}</div>
+          ${a.damage ? `<div style="font-size:18px;font-weight:800;color:var(--accent)">${a.damage}</div>` : ''}
+        </div>
+        ${a.text ? `<div style="font-size:12px;color:var(--muted);font-style:italic;line-height:1.4">${a.text}</div>` : ''}
+      </div>
+    `).join('')}
+  ` : '';
+  const abilities = tcg.abilities?.length ? `
+    <h3 style="margin-top:18px">Abilities</h3>
+    ${tcg.abilities.map(a => `
+      <div style="background:var(--panel-2);border-radius:8px;padding:10px 12px;margin-bottom:8px">
+        <div style="font-weight:700;color:var(--accent)">${a.name}${a.type ? ` · ${a.type}` : ''}</div>
+        ${a.text ? `<div style="font-size:12px;color:var(--muted);font-style:italic;line-height:1.4;margin-top:4px">${a.text}</div>` : ''}
+      </div>
+    `).join('')}
+  ` : '';
+  const weak = tcg.weaknesses?.length ? tcg.weaknesses.map(w => `${w.type} ${w.value}`).join(', ') : '—';
+  const resist = tcg.resistances?.length ? tcg.resistances.map(w => `${w.type} ${w.value}`).join(', ') : '—';
+  return `
+    <section>
+      ${attacks}
+      ${abilities}
+      <div class="vitals" style="margin-top:14px">
+        ${tcg.hp ? `<div class="vital"><div class="lbl">HP</div><div class="val">${tcg.hp}</div></div>` : ''}
+        <div class="vital"><div class="lbl">Weakness</div><div class="val" style="font-size:13px">${weak}</div></div>
+        <div class="vital"><div class="lbl">Resistance</div><div class="val" style="font-size:13px">${resist}</div></div>
+        <div class="vital"><div class="lbl">Retreat</div><div class="val">${'⚪ '.repeat(tcg.retreatCost) || 'free'}</div></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:10px;text-align:right">
+        ${tcg.setName || ''}${tcg.number ? ` · ${tcg.number}` : ''}${tcg.rarity ? ` · ${tcg.rarity}` : ''}${tcg.artist ? ` · illus. ${tcg.artist}` : ''}
+      </div>
+    </section>
+  `;
+}
+
 async function openModal(c) {
   const overlay = document.getElementById('overlay');
   const m = document.getElementById('modal');
   overlay.classList.add('show');
 
   const isPokemon = !c.kind || c.kind === 'pokemon';
+
+  // kick off TCG fetch in parallel
+  const tcgPromise = c.number ? loadTcgCard(c) : Promise.resolve(getTcgFromCache(c));
+
   if (!isPokemon) {
+    const tcg = await tcgPromise;
+    const hero = tcg?.image
+      ? `<img src="${tcg.image}" style="width:240px;height:auto;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.6)" alt="${c.display}">`
+      : `<div class="sprite-fallback" style="font-size:90px">${c.kind === 'energy' ? '⚡' : c.kind === 'item' ? '🎒' : '👤'}</div>`;
     m.innerHTML = `
       <button class="close-btn" onclick="closeModal()">×</button>
       <div class="modal-head">
-        <div class="sprite-fallback" style="font-size:90px">${c.kind === 'energy' ? '⚡' : c.kind === 'item' ? '🎒' : '👤'}</div>
+        ${hero}
         <div>
           <h2>${c.display}</h2>
-          <div class="meta">${c.kind?.toUpperCase()}${c.category ? ' · ' + c.category : ''}${c.src ? ` · <a href="SourceImages/${c.src}" target="_blank" class="src-link">📷 source</a>` : ''}</div>
+          <div class="meta">${c.kind?.toUpperCase()}${c.category ? ' · ' + c.category : ''}${tcg?.setName ? ' · ' + tcg.setName : ''}${c.src ? ` · <a href="SourceImages/${c.src}" target="_blank" class="src-link">📷 source</a>` : ''}</div>
         </div>
       </div>
+      ${renderTcgSection(tcg)}
       ${c.note ? `<section><h3>Note</h3><div class="flavor">${c.note}</div></section>` : ''}
     `;
     return;
@@ -1277,33 +1438,37 @@ async function openModal(c) {
 
   const p = await loadPokemon(c.name);
   const chain = p?.chainUrl ? await loadChain(p.chainUrl) : null;
+  const tcg = await tcgPromise;
 
-  const sprite = p ? `<img src="${p.sprite}" alt="${c.display}">` : '';
+  const hero = tcg?.image
+    ? `<img src="${tcg.image}" style="width:240px;height:auto;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.6)" alt="${c.display}">`
+    : (p ? `<img src="${p.sprite}" alt="${c.display}">` : '');
   const types = p ? p.types.map(t => `<span class="badge t-${t}">${t}</span>`).join('') : '';
 
   m.innerHTML = `
     <button class="close-btn" onclick="closeModal()">×</button>
     <div class="modal-head">
-      ${sprite}
+      ${hero}
       <div>
         <h2>${c.display}</h2>
         <div class="meta">${p ? '#' + String(p.id).padStart(3,'0') : ''}${p?.genus ? ' · ' + p.genus : ''}${c.rarity ? ' · ' + c.rarity : ''}${c.duplicate ? ' · duplicate copy' : ''}${c.variant ? ' · ' + c.variant : ''}${c.src ? ` · <a href="SourceImages/${c.src}" target="_blank" class="src-link">📷 source</a>` : ''}</div>
         <div class="types" style="margin-top:10px; justify-content:flex-start; display:flex; gap:4px; flex-wrap:wrap">${types}</div>
       </div>
     </div>
+    ${renderTcgSection(tcg)}
     <section>
       <h3>Evolution chain</h3>
       <div class="chain-tree">${chain ? renderChainTree(chain, c.name) : '<em style="color:var(--muted)">No evolution data.</em>'}</div>
     </section>
     ${p ? `
       <section>
-        <h3>Vitals</h3>
+        <h3>Pokédex vitals</h3>
         <div class="vitals">
           <div class="vital"><div class="lbl">Height</div><div class="val">${(p.height/10).toFixed(1)} m</div></div>
           <div class="vital"><div class="lbl">Weight</div><div class="val">${(p.weight/10).toFixed(1)} kg</div></div>
           <div class="vital"><div class="lbl">Generation</div><div class="val">${p.generation || '—'}</div></div>
           ${p.habitat ? `<div class="vital"><div class="lbl">Habitat</div><div class="val">${p.habitat}</div></div>` : ''}
-          <div class="vital" style="grid-column: 1/-1"><div class="lbl">Abilities</div><div class="val" style="font-size:14px">${p.abilities.map(a => a.replace(/-/g,' ')).join(', ')}</div></div>
+          <div class="vital" style="grid-column: 1/-1"><div class="lbl">Abilities (game)</div><div class="val" style="font-size:14px">${p.abilities.map(a => a.replace(/-/g,' ')).join(', ')}</div></div>
         </div>
       </section>
       <section>

@@ -79,21 +79,39 @@ Rules:
 3. The `src` field must be the path under SourceImages/, e.g.
    `"<name>/PXL_20260430_222302116.jpg"`.
 
-4. For non-Pokémon cards (energy, items, trainers/supporters), use:
-     {"kind": "energy",  "display": "Fighting Energy", "category": "fighting", "src": "..."}
-     {"kind": "item",    "display": "Quick Ball",       "src": "..."}
-     {"kind": "trainer", "display": "Iono",             "src": "..."}
-   These have NO `name` field. The `kind` distinguishes them.
+4. **Read the collector number off the card** (small text in a corner, usually
+   bottom-left or bottom-right, formatted like `125/197` or `TG29/TG30`). Put
+   the part BEFORE the slash in the `number` field as a string. Example:
+   `{"name": "charizard", "display": "Charizard ex", "number": "125", ...}`.
+   If the number is unreadable, omit the field — that's fine, the app falls
+   back to a generic sprite.
 
-5. If you're not confident about an identification, add `"uncertain": true`
+   If you can also identify the SET (set name printed near the bottom, e.g.
+   "Obsidian Flames", "Paldea Evolved", or a 3-letter code like OBF / PAL),
+   add a `set` field with the pokemontcg.io set ID. Common recent IDs:
+   `sv1` Scarlet & Violet base, `sv2` Paldea Evolved, `sv3` Obsidian Flames,
+   `sv3pt5` 151, `sv4` Paradox Rift, `sv4pt5` Paldean Fates, `sv5` Temporal
+   Forces, `sv6` Twilight Masquerade, `sv6pt5` Shrouded Fable, `sv7` Stellar
+   Crown, `sv8` Surging Sparks, `sv8pt5` Prismatic Evolutions, `sv9` Journey
+   Together. Older Sword & Shield: `swsh1` … `swsh12pt5`. If you're unsure,
+   omit `set` — `number` alone is usually enough to disambiguate.
+
+5. For non-Pokémon cards (energy, items, trainers/supporters), use:
+     {"kind": "energy",  "display": "Fighting Energy", "category": "fighting", "number": "...", "src": "..."}
+     {"kind": "item",    "display": "Quick Ball",       "number": "...", "src": "..."}
+     {"kind": "trainer", "display": "Iono",             "number": "...", "src": "..."}
+   These have NO `name` field — `kind` distinguishes them. Still capture
+   `number` (and `set` if you can) so we can fetch the real card image.
+
+6. If you're not confident about an identification, add `"uncertain": true`
    and `"note": "<what you saw — HP, attack name, color, anything that helps a human verify>"`.
    Do NOT guess silently. It's far better to flag uncertainty than to be wrong.
 
-6. List cards in reading order within each photo (left-to-right, top-to-bottom),
+7. List cards in reading order within each photo (left-to-right, top-to-bottom),
    and process photos in the order I attach them. Add a comment-style separator
    only if it helps your reasoning — strip it before producing the final JSON.
 
-7. The final output must be ONLY valid JSON — no prose, no markdown fence, no
+8. The final output must be ONLY valid JSON — no prose, no markdown fence, no
    trailing commentary. Pretty-print it.
 
 When you're not certain, name the closest matching real Pokémon and flag it as
@@ -135,12 +153,16 @@ Photos attached.
 |---|---|---|
 | `name` | yes | lowercase PokéAPI name (e.g. `tapu-koko`, `mr-mime`, `weezing`) |
 | `display` | yes | how it shows in the UI |
+| `number` | recommended | collector number printed on the card (e.g. `"125"`, `"TG29"`, `"199"`) — used to look up the exact print on [pokemontcg.io](https://docs.pokemontcg.io/) so we can show the real card image and attack data |
+| `set` | optional | pokemontcg.io set ID (e.g. `"sv4"`, `"swsh12pt5"`). Helps disambiguate. Usually unnecessary if `number` is unique enough |
 | `src` | recommended | photo path under `SourceImages/`, used by the 📷 source link |
 | `duplicate` | optional | `true` flags a 2nd-or-later copy |
 | `rarity` | optional | shown under the name (e.g. `"V"`, `"ex"`) |
 | `variant` | optional | short note like `"Galarian"` or `"Team Rocket's"` |
 | `note` | optional | freeform note shown in the modal |
 | `uncertain` | optional | `true` puts a red "verify?" corner badge on the card |
+
+If `number` is present, the app fetches the real card image and TCG-specific data (attacks, energy costs, HP) from pokemontcg.io. If absent, it falls back to a generic Pokémon sprite from PokéAPI.
 
 ### Non-Pokémon cards (energy, items, trainers)
 
